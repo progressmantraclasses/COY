@@ -1,0 +1,19 @@
+{
+  "name": "coy-discover",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Coy SDE intern assignment: a privacy-first swipe-based Discover tab (Next.js + NestJS).",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n api,web -c magenta,cyan \"npm:dev -w backend\" \"npm:dev -w frontend\"",
+    "build": "npm run build -w backend && npm run build -w frontend",
+    "test": "npm run test -w backend && npm run test:e2e -w backend",
+    "reset": "node -e \"fetch('http://localhost:4000/reset',{method:'POST'}).then(r=>r.json()).then(console.log)\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
