@@ -11,10 +11,15 @@ import { DATA_FILE, StoreService } from './store/store.service';
     DiscoverService,
     StoreService,
     { provide: PROFILES, useValue: SEED_PROFILES },
-    { provide: FEED_SEED, useValue: Number(process.env.FEED_SEED ?? 20261119) },
+    // Factories (not useValue) so env vars are read at startup, after .env is loaded.
+    {
+      provide: FEED_SEED,
+      useFactory: () => Number(process.env.FEED_SEED || 20261119),
+    },
     {
       provide: DATA_FILE,
-      useValue: process.env.DATA_FILE ?? path.join(process.cwd(), 'data', 'db.json'),
+      useFactory: () =>
+        path.resolve(process.env.DATA_FILE || path.join(process.cwd(), 'data', 'db.json')),
     },
   ],
 })
