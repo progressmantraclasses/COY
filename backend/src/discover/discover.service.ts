@@ -64,8 +64,8 @@ export class DiscoverService implements OnModuleInit {
     @Inject(SEED_PROFILES_TOKEN) private readonly seedProfiles: Profile[],
     @Inject(FEED_SEED) private readonly seed: number,
     @Inject(REFILL_OPTIONS) private readonly refillOptions: RefillOptions,
-    private readonly store: StoreService,
-    private readonly source: ProfileSource,
+    @Inject(StoreService) private readonly store: StoreService,
+    @Inject(ProfileSource) private readonly source: ProfileSource,
   ) {}
 
   async onModuleInit(): Promise<void> {

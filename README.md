@@ -36,7 +36,7 @@ A swipe-based **Discover** tab (like Tinder/Bumble) for [Coy](https://app.getcoy
 | Never reveal who liked the user unless mutual | [Section 9](#9-privacy-how-never-reveal-who-liked-you-is-enforced), covered by tests |
 | `GET /feed`, `POST /swipe`, `GET /matches` | [Section 8](#8-api-reference) |
 | Swipes and matches persist across reloads | Stored in MongoDB ([section 5](#5-the-database)) |
-| Clean, tested backend logic | 30 tests: 24 unit + 6 end-to-end ([section 7](#7-run-the-tests)) |
+| Clean, tested backend logic | 31 tests: 24 unit + 7 end-to-end ([section 7](#7-run-the-tests)) |
 
 ---
 
@@ -319,6 +319,26 @@ npm start
 
 Then open http://localhost:3000/discover.
 
+### Deploying to Vercel (optional)
+
+Deploy the backend and the frontend as **two Vercel projects** from the same repo.
+
+**1. Backend project**
+
+- **Root Directory:** `backend`. Vercel runs `src/main.ts` as a serverless function: its default export is a request handler that starts NestJS once and reuses it, together with the MongoDB connection.
+- **Environment variables** (Project → Settings → Environment Variables):
+  - `MONGODB_URI`: your Atlas connection string. **Required on Vercel**: without it the in-memory fallback loses data between requests.
+  - `CORS_ORIGIN`: your frontend URL, e.g. `https://your-frontend.vercel.app`. No trailing slash; separate several with commas.
+  - Optional: `MONGODB_DB`, `FEED_SEED`, `PROFILE_REFILL`, `MAX_PROFILES`.
+- **MongoDB Atlas → Network Access:** add `0.0.0.0/0` (allow from anywhere). Vercel functions don't have fixed IP addresses.
+- Check it: open `https://<your-backend>.vercel.app/`. It should show `{"ok":true,"service":"coy-discover-api"}`, and `/feed` should list profiles.
+
+**2. Frontend project**
+
+- **Root Directory:** `frontend`.
+- **Environment variable:** `NEXT_PUBLIC_API_URL=https://<your-backend>.vercel.app`, with no trailing slash.
+- **Redeploy after changing it.** `NEXT_PUBLIC_*` values are baked in at build time.
+
 ---
 
 ## 7. Run the tests
@@ -327,11 +347,11 @@ Then open http://localhost:3000/discover.
 npm test
 ```
 
-This runs **30 backend tests** (24 unit tests + 6 end-to-end API tests) and takes about a minute. You should see:
+This runs **31 backend tests** (24 unit tests + 7 end-to-end API tests) and takes about a minute. You should see:
 
 ```
 Tests:       24 passed, 24 total
-Tests:       6 passed, 6 total
+Tests:       7 passed, 7 total
 ```
 
 The tests cover:
@@ -345,6 +365,7 @@ The tests cover:
 - Data **survives a restart**, and seeding on every startup never duplicates profiles.
 - When the feed runs low, new profiles are fetched and can be swiped and matched. Fetching stops at the profile cap, so the empty state is reachable. If fetching fails, the remaining feed is still served.
 - The app starts and works without `MONGODB_URI` (in-memory fallback).
+- The Vercel serverless handler (default export of `main.ts`) serves the API and reuses one app across requests.
 
 The tests use an in-memory store and a fake profile source, so they **need no database or internet** and never touch your real MongoDB data.
 
@@ -356,6 +377,7 @@ Base URL: `http://localhost:4000`
 
 | Method | Path | Request body | Response |
 | --- | --- | --- | --- |
+| `GET` | `/` | | `{ "ok": true, "service": "coy-discover-api" }`: health check |
 | `GET` | `/feed` | | `{ "profiles": Profile[] }`: profiles you haven't swiped on yet |
 | `POST` | `/swipe` | `{ "profileId": "p21", "action": "like" }` (`action` is `"like"` or `"pass"`) | `{ "matched": false }` or `{ "matched": true, "match": Match }` |
 | `GET` | `/matches` | | `{ "matches": Match[] }`: mutual matches, newest first |
@@ -434,7 +456,7 @@ COY/
 ├── backend/                # NestJS API (port 4000)
 │   ├── .env.example        # copy to .env and set MONGODB_URI
 │   ├── src/
-│   │   ├── main.ts                 # starts the server, loads .env, CORS, validation
+│   │   ├── main.ts                 # local server + Vercel handler (default export), .env, CORS, validation
 │   │   ├── app.module.ts           # wires everything together
 │   │   ├── discover/
 │   │   │   ├── discover.controller.ts  # GET /feed, POST /swipe, GET /matches, POST /reset
@@ -482,6 +504,8 @@ COY/
 | Changed a `.env` value but nothing happened | Stop the app (`Ctrl + C`) and run `npm run dev` again. Env files are only read at startup. |
 | Profile photos don't load (letters show instead) | Photos come from randomuser.me and need internet. Without it, the app shows coloured initials instead. Everything else still works. |
 | Want to open it on your phone (same Wi-Fi) | Find your computer's IP (`ipconfig` on Windows, `ifconfig` / `ip a` on macOS/Linux), e.g. `192.168.1.5`. Set `NEXT_PUBLIC_API_URL=http://192.168.1.5:4000` in `frontend/.env` and `CORS_ORIGIN=http://localhost:3000,http://192.168.1.5:3000` in `backend/.env`, restart, then open `http://192.168.1.5:3000/discover` on the phone. Your firewall may need to allow Node.js. |
+| Vercel logs: `Invalid export found in module .../main.js` | Fixed: `backend/src/main.ts` now has a default-exported handler. Push the latest code and redeploy. |
+| Deployed app shows **"Can't reach Discover"** | Check the frontend's `NEXT_PUBLIC_API_URL` (then redeploy the frontend), the backend's `CORS_ORIGIN` (the exact frontend URL), and Atlas Network Access (`0.0.0.0/0`). See [Deploying to Vercel](#deploying-to-vercel-optional). |
 | I want to start the demo over | See [Resetting the data](#resetting-the-data). |
 
 ---

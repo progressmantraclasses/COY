@@ -118,3 +118,38 @@ describe('Discover API without MONGODB_URI (zero-setup fallback)', () => {
     expect(matches.body.matches.map((m: { id: string }) => m.id)).toEqual([liker.id]);
   });
 });
+
+describe('Vercel serverless handler (default export of main.ts)', () => {
+  const saved = { uri: process.env.MONGODB_URI, refill: process.env.PROFILE_REFILL };
+
+  beforeAll(() => {
+    // Existing env vars win over backend/.env, so this forces in-memory storage and no network.
+    process.env.MONGODB_URI = '';
+    process.env.PROFILE_REFILL = 'false';
+  });
+
+  afterAll(() => {
+    for (const [key, value] of [['MONGODB_URI', saved.uri], ['PROFILE_REFILL', saved.refill]] as const) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  });
+
+  it('exports a request handler that serves the API and reuses one app across requests', async () => {
+    const { default: handler } = await import('../src/main');
+    expect(typeof handler).toBe('function');
+
+    await request(handler).get('/').expect(200, { ok: true, service: 'coy-discover-api' });
+    const feed = await request(handler).get('/feed').expect(200);
+    expect(feed.body.profiles).toHaveLength(SEED_PROFILES.length);
+
+    const liker = SEED_PROFILES.find((p) => p.likedMe)!;
+    await request(handler).post('/swipe').send({ profileId: liker.id, action: 'like' }).expect(200);
+    // Same warm instance: the swipe from the previous request is still there.
+    await request(handler).post('/swipe').send({ profileId: liker.id, action: 'pass' }).expect(409);
+    await request(handler).post('/swipe').send({ profileId: liker.id, action: 'nope' }).expect(400);
+
+    const cors = await request(handler).get('/feed').set('Origin', 'http://localhost:3000').expect(200);
+    expect(cors.headers['access-control-allow-origin']).toBe('http://localhost:3000');
+  });
+});
