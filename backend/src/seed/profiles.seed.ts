@@ -4,7 +4,9 @@ const photo = (g: 'women' | 'men', n: number) =>
   `https://randomuser.me/api/portraits/${g}/${n}.jpg`;
 
 /**
- * 32 mock profiles. `likedMe: true` means this person has already (secretly)
+ * 32 starter profiles, written to MongoDB on startup if they aren't there yet.
+ * When the feed runs low, more real profiles are fetched from randomuser.me
+ * (see `profiles/profile-source.ts`). `likedMe: true` means this person has already (secretly)
  * liked the logged-in user, so liking them back during a demo creates a match.
  * 9 of the 32 have liked the user; they are spread through the list and the
  * feed is shuffled anyway, so their position reveals nothing.

@@ -9,7 +9,7 @@ import { useDiscover } from "@/hooks/useDiscover";
 import { API_URL, type SwipeAction } from "@/lib/api";
 
 export default function DiscoverPage() {
-  const { profiles, error, matchCount, reveal, closeReveal, swipe, reload, reset } = useDiscover();
+  const { profiles, error, matchCount, reveal, refilling, closeReveal, swipe, reload, reset } = useDiscover();
   const topCard = useRef<SwipeCardHandle>(null);
   const hasCards = !!profiles && profiles.length > 0;
 
@@ -56,7 +56,7 @@ export default function DiscoverPage() {
               </button>
             </div>
           </div>
-        ) : profiles === null ? (
+        ) : profiles === null || (!hasCards && refilling) ? (
           <div className="skeleton" aria-label="Loading profiles" />
         ) : !hasCards ? (
           <div className="status">

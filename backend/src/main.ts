@@ -21,6 +21,7 @@ function loadEnv() {
 async function bootstrap() {
   loadEnv();
   const app = await NestFactory.create(AppModule);
+  app.enableShutdownHooks(); // closes the MongoDB connection on Ctrl+C
   app.enableCors({
     origin: (process.env.CORS_ORIGIN || 'http://localhost:3000').split(',').map((o) => o.trim()),
   });
@@ -31,5 +32,8 @@ async function bootstrap() {
 }
 
 if (require.main === module) {
-  void bootstrap();
+  bootstrap().catch((err: unknown) => {
+    console.error('Coy Discover API failed to start:', err instanceof Error ? err.message : err);
+    process.exit(1);
+  });
 }

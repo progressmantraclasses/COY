@@ -1,25 +1,26 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/main';
+import { ProfileSource } from '../src/profiles/profile-source';
 import { SEED_PROFILES } from '../src/seed/profiles.seed';
-import { DATA_FILE } from '../src/store/store.service';
+import { StoreService } from '../src/store/store.service';
+import { MemoryStore } from '../src/store/memory.store';
+import { StubSource } from './stub-source';
 
 describe('Discover API (e2e)', () => {
   let app: INestApplication;
-  let dir: string;
   const liker = SEED_PROFILES.find((p) => p.likedMe)!;
   const nonLiker = SEED_PROFILES.find((p) => !p.likedMe)!;
 
   beforeEach(async () => {
-    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'coy-e2e-'));
+    // Same app wiring as production, with the database and randomuser.me swapped for in-memory fakes.
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
-      .overrideProvider(DATA_FILE)
-      .useValue(path.join(dir, 'db.json'))
+      .overrideProvider(StoreService)
+      .useValue(new MemoryStore())
+      .overrideProvider(ProfileSource)
+      .useValue(new StubSource())
       .compile();
     app = moduleRef.createNestApplication();
     configureApp(app);
@@ -28,13 +29,13 @@ describe('Discover API (e2e)', () => {
 
   afterEach(async () => {
     await app.close();
-    fs.rmSync(dir, { recursive: true, force: true });
   });
 
   it('GET /feed returns at least 30 unswiped profiles with public fields only', async () => {
     const res = await request(app.getHttpServer()).get('/feed').expect(200);
     expect(res.body.profiles.length).toBeGreaterThanOrEqual(30);
     expect(res.text).not.toMatch(/likedMe/);
+    expect(res.text).not.toMatch(/_id/);
   });
 
   it('full flow: like a liker -> match, pass -> gone from feed, /matches lists only mutuals', async () => {
@@ -79,5 +80,41 @@ describe('Discover API (e2e)', () => {
     expect(feed.body.profiles).toHaveLength(SEED_PROFILES.length);
     const matches = await request(server).get('/matches').expect(200);
     expect(matches.body.matches).toEqual([]);
+  });
+});
+
+describe('Discover API without MONGODB_URI (zero-setup fallback)', () => {
+  let app: INestApplication;
+  const saved = process.env.MONGODB_URI;
+
+  beforeEach(async () => {
+    delete process.env.MONGODB_URI;
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(ProfileSource)
+      .useValue(new StubSource())
+      .compile();
+    app = moduleRef.createNestApplication();
+    configureApp(app);
+    await app.init();
+  });
+
+  afterEach(async () => {
+    await app.close();
+    if (saved === undefined) delete process.env.MONGODB_URI;
+    else process.env.MONGODB_URI = saved;
+  });
+
+  it('starts with in-memory storage and keeps swipes between requests', async () => {
+    const server = app.getHttpServer();
+    const before = await request(server).get('/feed').expect(200);
+    expect(before.body.profiles).toHaveLength(SEED_PROFILES.length);
+
+    const liker = SEED_PROFILES.find((p) => p.likedMe)!;
+    await request(server).post('/swipe').send({ profileId: liker.id, action: 'like' }).expect(200);
+
+    const after = await request(server).get('/feed').expect(200);
+    expect(after.body.profiles).toHaveLength(SEED_PROFILES.length - 1);
+    const matches = await request(server).get('/matches').expect(200);
+    expect(matches.body.matches.map((m: { id: string }) => m.id)).toEqual([liker.id]);
   });
 });
